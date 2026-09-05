@@ -4,64 +4,61 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <meta name="theme-color" content="#071019" />
-  <title>Factory X-Ray — Türkiye Tesis Radarı</title>
+  <title>Factory X-Ray — Industrial Intelligence</title>
   <link rel="stylesheet" href="./styles.css" />
 </head>
 <body>
   <div class="noise"></div>
   <main class="shell">
     <header class="topbar">
-      <div>
-        <div class="eyebrow">HOMESTEAD INDUSTRIAL INTELLIGENCE</div>
-        <h1>Factory X-Ray</h1>
-        <p>Türkiye Tesis & Endüstriyel Fırsat Radarı</p>
-      </div>
-      <div class="top-actions">
-        <span class="live"><i></i> Tarama motoru aktif</span>
-        <button id="refreshBtn" class="ghost">Yenile</button>
-        <button id="logoutBtn" class="ghost danger">Çıkış</button>
-      </div>
+      <div><div class="eyebrow">HOMESTEAD INDUSTRIAL INTELLIGENCE</div><h1>Factory X-Ray</h1><p>Türkiye Tesis, Fırsat ve Satış Operasyon Radarı</p></div>
+      <div class="top-actions"><span class="live"><i></i> Canlı veri</span><button id="refreshBtn" class="ghost">Yenile</button><button id="logoutBtn" class="ghost danger">Çıkış</button></div>
     </header>
 
+    <nav id="nav" class="nav-tabs" aria-label="Dashboard bölümleri"></nav>
     <section id="statusBanner" class="status hidden"></section>
 
-    <section class="hero-grid">
-      <article class="hero-card accent"><span>Şirket</span><strong id="companies">—</strong><small>kayıtlı şirket</small></article>
-      <article class="hero-card"><span>Tesis</span><strong id="facilities">—</strong><small>üretim tesisi</small></article>
-      <article class="hero-card"><span>İl</span><strong id="provinces">—</strong><small>Türkiye kapsamı</small></article>
-      <article class="hero-card"><span>İlçe</span><strong id="districts">—</strong><small>coğrafi altyapı</small></article>
-      <article class="hero-card"><span>OSB</span><strong id="osbs">—</strong><small>resmî OSBÜK kaydı</small></article>
-      <article class="hero-card"><span>Kaynak</span><strong id="sources">—</strong><small>kanıt / web kaynağı</small></article>
-      <article class="hero-card"><span>Yeni Aday</span><strong id="candidates">—</strong><small>inceleme kuyruğu</small></article>
-      <article class="hero-card"><span>Kontak</span><strong id="contacts">—</strong><small>karar verici</small></article>
-      <article class="hero-card"><span>Sinyal</span><strong id="signals">—</strong><small>yatırım / proje</small></article>
-      <article class="hero-card"><span>Fırsat</span><strong id="opportunities">—</strong><small>satış fırsatı</small></article>
+    <section id="overviewView" class="view">
+      <section class="hero-grid">
+        <article class="hero-card accent"><span>Şirket</span><strong id="companies">—</strong><small>kayıtlı şirket</small></article>
+        <article class="hero-card"><span>Tesis</span><strong id="facilities">—</strong><small>fiziksel tesis</small></article>
+        <article class="hero-card"><span>Fırsat</span><strong id="opportunities">—</strong><small>satış fırsatı</small></article>
+        <article class="hero-card"><span>Kontak</span><strong id="contacts">—</strong><small>karar verici</small></article>
+        <article class="hero-card"><span>Pipeline</span><strong id="pipelineValue">—</strong><small>tahmini EUR değer</small></article>
+        <article class="hero-card"><span>Proje</span><strong id="projects">—</strong><small>aktif / kayıtlı proje</small></article>
+        <article class="hero-card"><span>Açık Görev</span><strong id="openTasks">—</strong><small>next action</small></article>
+        <article class="hero-card"><span>Geciken</span><strong id="overdueTasks">—</strong><small>aksiyon</small></article>
+        <article class="hero-card"><span>Kaynak</span><strong id="sources">—</strong><small>kanıt kaynağı</small></article>
+        <article class="hero-card"><span>Yeni Aday</span><strong id="candidates">—</strong><small>inceleme kuyruğu</small></article>
+      </section>
+
+      <section class="grid-3">
+        <article class="panel"><div class="panel-head"><div><span class="section-tag">COĞRAFYA</span><h2>En yoğun tesis illeri</h2></div></div><div id="provinceBars" class="bars"></div></article>
+        <article class="panel"><div class="panel-head"><div><span class="section-tag">SEKTÖR</span><h2>Tesis yoğunluğu</h2></div></div><div id="sectorBars" class="bars"></div></article>
+        <article class="panel"><div class="panel-head"><div><span class="section-tag">PIPELINE</span><h2>Satış aşamaları</h2></div></div><div id="stageBars" class="bars"></div></article>
+      </section>
+
+      <section class="grid-3">
+        <article class="panel"><div class="panel-head"><div><span class="section-tag">VERİ KALİTESİ</span><h2>Tesis kalitesi</h2></div></div><div id="qualityCards" class="queue-grid"></div></article>
+        <article class="panel"><div class="panel-head"><div><span class="section-tag">KEŞİF</span><h2>Son adaylar</h2></div></div><div id="candidateMini" class="mini-list"></div></article>
+        <article class="panel"><div class="panel-head"><div><span class="section-tag">SİSTEM</span><h2>Son ingest trendi</h2></div></div><div id="ingestMini" class="mini-list"></div></article>
+      </section>
     </section>
 
-    <section class="grid-3">
-      <article class="panel"><div class="panel-head"><div><span class="section-tag">COĞRAFYA</span><h2>En yoğun tesis illeri</h2></div></div><div id="provinceBars" class="bars"></div></article>
-      <article class="panel"><div class="panel-head"><div><span class="section-tag">SEKTÖR</span><h2>Tesis yoğunluğu</h2></div></div><div id="sectorBars" class="bars"></div></article>
-      <article class="panel"><div class="panel-head"><div><span class="section-tag">OTOMASYON</span><h2>Tarama motoru</h2></div></div><div id="queueCards" class="queue-grid"></div><div class="divider"></div><h3>OSB veri kapsamı</h3><div id="osbCoverage" class="coverage"></div></article>
+    <section id="dataView" class="view hidden">
+      <article class="panel wide">
+        <div class="panel-head"><div><span id="viewTag" class="section-tag">DATA</span><h2 id="viewTitle">—</h2><p id="viewSubtitle" class="view-subtitle"></p></div><span id="generatedAt" class="timestamp"></span></div>
+        <div id="viewActions" class="view-actions"></div>
+        <div class="table-wrap"><table><thead id="dataHead"></thead><tbody id="dataRows"></tbody></table></div>
+      </article>
     </section>
 
-    <section class="panel wide">
-      <div class="panel-head"><div><span class="section-tag">KEŞİF</span><h2>Son bulunan adaylar</h2></div><span id="generatedAt" class="timestamp"></span></div>
-      <div class="table-wrap"><table><thead><tr><th>Tip</th><th>Aday</th><th>İl</th><th>Arama grubu</th><th>Domain</th><th>Skor</th></tr></thead><tbody id="candidateRows"></tbody></table></div>
-    </section>
-
-    <section class="panel wide">
-      <div class="panel-head"><div><span class="section-tag">KANIT</span><h2>Son kaynaklar</h2></div></div>
-      <div class="table-wrap"><table><thead><tr><th>Başlık</th><th>Yayıncı</th><th>Tip</th><th>Kontrol</th></tr></thead><tbody id="sourceRows"></tbody></table></div>
-    </section>
-
-    <section class="panel wide compact"><div class="panel-head"><div><span class="section-tag">SİSTEM</span><h2>Zamanlanmış görevler</h2></div></div><div id="cronRows" class="cron-list"></div></section>
-
-    <footer><span>Factory X-Ray · Supabase + Tavily + Firecrawl</span><span>Veriler otomatik zenginleşir; adaylar doğrulanmadan ana kayıt haline gelmez.</span></footer>
+    <footer><span>Factory X-Ray · Supabase Edge API + GitHub Pages</span><span>Private fx şeması frontend’e doğrudan açılmaz.</span></footer>
   </main>
 
   <div id="loginOverlay" class="login-overlay">
     <form id="loginForm" class="login-card">
-      <div class="login-mark">FX</div><div class="eyebrow">SECURE ACCESS</div><h2>Factory X-Ray</h2><p>Türkiye endüstriyel tesis ve satış radarı</p>
+      <div class="login-mark">FX</div><div class="eyebrow">SECURE ACCESS</div><h2>Factory X-Ray</h2><p>Endüstriyel tesis ve satış radarı</p>
       <label>Kullanıcı adı<input id="username" autocomplete="username" value="factory" required /></label>
       <label>Şifre<input id="password" type="password" autocomplete="current-password" required /></label>
       <button type="submit" class="primary">Dashboard’a Gir</button><div id="loginError" class="login-error"></div>

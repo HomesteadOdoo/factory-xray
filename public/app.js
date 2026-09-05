@@ -23,8 +23,10 @@ const views = [
   ['signals','Sinyaller','INTELLIGENCE','Yatırım, retrofit ve proje sinyalleri'],
   ['evidence','Kanıt','EVIDENCE','FACT / INFERRED / AI_ESTIMATE kanıt kayıtları'],
   ['sources','Kaynaklar','SOURCES','Doğrulanmış kaynak ve güvenilirlik kayıtları'],
+  ['coverage','Coverage Gap','COVERAGE','Az temsil edilen iller ve veri boşlukları'],
   ['ingest','Ingest','SYSTEM','Son veri toplama koşuları ve sonuçları'],
   ['quality','Veri Kalitesi','QUALITY','Eksik alan, confidence ve araştırma durumu'],
+  ['health','Health','HEALTH','Dashboard API ve veri tazelik görünümü'],
 ]
 
 const tableConfig = {
@@ -43,8 +45,10 @@ const tableConfig = {
   signals: [['signal_date','Tarih'],['company','Şirket'],['facility','Tesis'],['signal_type','Sinyal'],['title','Başlık'],['score','Skor'],['confidence_pct','Güven'],['source_url','Kaynak']],
   evidence: [['observed_at','Tarih'],['company','Şirket'],['facility','Tesis'],['evidence_type','Tip'],['evidence_status','Sınıf'],['confidence_pct','Güven'],['evidence_text','Kanıt'],['source_url','Kaynak']],
   sources: [['title','Başlık'],['publisher','Yayıncı'],['source_type','Tip'],['published_at','Yayın'],['checked_at','Kontrol'],['reliability_score','Güvenilirlik'],['url','URL']],
+  coverage: [['province','İl'],['companies','Şirket'],['facilities','Tesis'],['covered_districts','Kapsanan ilçe'],['covered_osbs','Kapsanan OSB'],['missing_district','İlçe eksik'],['missing_osb','OSB eksik'],['missing_coordinates','Koordinat eksik']],
   ingest: [['run_started_at','Başlangıç'],['run_finished_at','Bitiş'],['scope','Kapsam'],['source_family','Kaynak ailesi'],['records_seen','Görülen'],['records_added','Eklenen'],['records_updated','Güncellenen'],['records_rejected','Reddedilen'],['notes','Not']],
   quality: [['name','Tesis'],['company','Şirket'],['province','İl'],['confidence_pct','Güven'],['research_status','Araştırma'],['last_researched_at','Son araştırma'],['missing_district','İlçe eksik'],['missing_osb','OSB eksik'],['missing_coordinates','Koordinat eksik']],
+  health: [['component','Bileşen'],['records','Kayıt'],['latest_update','Son güncelleme']],
 }
 
 function escapeHtml(value = '') {
@@ -61,7 +65,7 @@ function setStatus(message,type='info'){
 function formatValue(key,value){
   if(value===null||value===undefined||value==='') return '—'
   if(key.includes('value_eur')||key==='amount_eur'||key==='estimated_value_eur') return eur.format(Number(value)||0)
-  if(key.endsWith('_at')||key.includes('date')) { const d=new Date(value); return Number.isNaN(d.getTime())?escapeHtml(value):dtFmt.format(d) }
+  if(key.endsWith('_at')||key.includes('date')||key==='latest_update') { const d=new Date(value); return Number.isNaN(d.getTime())?escapeHtml(value):dtFmt.format(d) }
   if(typeof value==='boolean') return value?'Evet':'Hayır'
   if(key==='website'||key.endsWith('_url')) return `<a href="${escapeHtml(value)}" target="_blank" rel="noopener">Aç</a>`
   if(typeof value==='number') return fmt.format(value)
@@ -71,12 +75,23 @@ function formatValue(key,value){
 function buildNav(){
   $('nav').innerHTML=views.map(([key,label])=>`<a href="#${key}" data-view="${key}">${escapeHtml(label)}</a>`).join('')
 }
-function currentView(){ return (location.hash||'#overview').slice(1) }
+function currentView(){ return (location.hash||'#overview').slice(1).split('?')[0] }
 function setActiveNav(view){ document.querySelectorAll('#nav a').forEach(a=>a.classList.toggle('active',a.dataset.view===view)) }
 
-async function api(view='overview'){
+async function api(view='overview',params={}){
   const auth=getAuth(); if(!auth) throw new Error('NO_AUTH')
-  const url=view==='overview'?API_URL:`${API_URL}?view=${encodeURIComponent(view)}`
+  const url=new URL(API_URL)
+  if(view!=='overview') url.searchParams.set('view',view)
+  Object.entries(params).forEach(([k,v])=>url.searchParams.set(k,String(v)))
+  const res=await fetch(url,{headers:{Authorization:`Basic ${auth}`},cache:'no-store'})
+  if(res.status===401){clearAuth();showLogin(true);throw new Error('UNAUTHORIZED')}
+  if(!res.ok) throw new Error(`API ${res.status}`)
+  return res.json()
+}
+
+async function apiDetail(kind,id){
+  const auth=getAuth(); if(!auth) throw new Error('NO_AUTH')
+  const url=new URL(API_URL); url.searchParams.set('detail',kind); url.searchParams.set('id',id)
   const res=await fetch(url,{headers:{Authorization:`Basic ${auth}`},cache:'no-store'})
   if(res.status===401){clearAuth();showLogin(true);throw new Error('UNAUTHORIZED')}
   if(!res.ok) throw new Error(`API ${res.status}`)
@@ -111,9 +126,35 @@ function renderTable(view,data){
   const cols=tableConfig[view]||[]
   $('dataHead').innerHTML=`<tr>${cols.map(([,label])=>`<th>${escapeHtml(label)}</th>`).join('')}</tr>`
   const rows=data.rows||[]
-  $('dataRows').innerHTML=rows.length?rows.map(r=>`<tr>${cols.map(([key])=>`<td class="${['display_name','name','company','facility','full_name','title','quote_ref'].includes(key)?'strong':''}">${formatValue(key,r[key])}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${Math.max(cols.length,1)}" class="empty-cell">Henüz kayıt yok</td></tr>`
+  const drill=['companies','facilities','opportunities'].includes(view)
+  $('dataRows').innerHTML=rows.length?rows.map(r=>`<tr${drill&&r.id?` class="drill-row" data-id="${escapeHtml(r.id)}" data-kind="${view==='companies'?'company':view==='facilities'?'facility':'opportunity'}" title="Detayı aç"`:''}>${cols.map(([key])=>`<td class="${['display_name','name','company','facility','full_name','title','quote_ref'].includes(key)?'strong':''}">${formatValue(key,r[key])}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${Math.max(cols.length,1)}" class="empty-cell">Henüz kayıt yok</td></tr>`
   const crmViews=['companies','facilities','opportunities']
   $('viewActions').innerHTML=crmViews.includes(view)?'<button class="ghost" disabled title="Güvenli write endpoint hazırlanıyor">+ Temas Ekle</button><button class="ghost" disabled>+ Fırsat Aç</button><button class="ghost" disabled>+ Proje Oluştur</button><button class="ghost" disabled>+ Teklif Kaydet</button><button class="ghost" disabled>+ Görev Ata</button>':''
+  document.querySelectorAll('.drill-row').forEach(row=>row.addEventListener('click',()=>loadDetail(row.dataset.kind,row.dataset.id,view)))
+}
+
+function detailSection(title,rows){
+  if(!rows?.length) return `<section class="detail-section"><h3>${escapeHtml(title)}</h3><div class="empty">Kayıt yok</div></section>`
+  const keys=Object.keys(rows[0]).filter(k=>k!=='id').slice(0,8)
+  return `<section class="detail-section"><h3>${escapeHtml(title)}</h3><div class="table-wrap"><table><thead><tr>${keys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${keys.map(k=>`<td>${formatValue(k,r[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`
+}
+
+async function loadDetail(kind,id,parentView){
+  setStatus('Detay yükleniyor…'); $('refreshBtn').disabled=true
+  try{
+    const data=await apiDetail(kind,id)
+    $('overviewView').classList.add('hidden'); $('dataView').classList.remove('hidden')
+    $('viewTag').textContent='DETAIL'; $('viewTitle').textContent=data.record?.display_name||data.record?.name||data.record?.opportunity_type||'Detay'; $('viewSubtitle').textContent=`${kind.toUpperCase()} · ilişkili kayıtlar`; $('generatedAt').textContent=data.generatedAt?`Güncellendi: ${dtFmt.format(new Date(data.generatedAt))}`:''
+    const record=data.record||{}
+    const rows=Object.entries(record).filter(([k])=>!['id'].includes(k)).map(([field,value])=>({field,value}))
+    $('dataHead').innerHTML='<tr><th>Alan</th><th>Değer</th></tr>'
+    $('dataRows').innerHTML=rows.map(r=>`<tr><td class="strong">${escapeHtml(r.field)}</td><td>${formatValue(r.field,r.value)}</td></tr>`).join('')
+    const related=Object.entries(data).filter(([k,v])=>Array.isArray(v)&&v.length).map(([k,v])=>detailSection(k,v)).join('')
+    $('viewActions').innerHTML=`<button id="detailBack" class="ghost">← Listeye dön</button>${['company','facility','opportunity'].includes(kind)?'<button class="ghost" disabled>+ Temas Ekle</button><button class="ghost" disabled>+ Fırsat Aç</button><button class="ghost" disabled>+ Proje Oluştur</button><button class="ghost" disabled>+ Teklif Kaydet</button><button class="ghost" disabled>+ Görev Ata</button>':''}`+related
+    $('detailBack').addEventListener('click',()=>load(parentView))
+    setStatus('')
+  }catch(err){console.error(err);setStatus('Detay verisi alınamadı.','error')}
+  finally{$('refreshBtn').disabled=false}
 }
 
 async function load(view=currentView()){

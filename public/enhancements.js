@@ -5,7 +5,7 @@
   let mapInstance = null
   let markerLayer = null
 
-  const esc=(v='')=>String(v).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[s]))
+  const esc=(v='')=>String(v).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]))
   const fmtValue=(k,v)=>{
     if(v===null||v===undefined||v==='') return '—'
     if(k==='linkedin_url'||k==='source_url'||k==='website') return `<a href="${esc(v)}" target="_blank" rel="noopener">Aç</a>`
@@ -71,7 +71,8 @@
         const title = esc(r.name || 'Tesis')
         const company = esc(r.company || '—')
         const place = [r.province,r.district,r.osb].filter(Boolean).join(' · ')
-        L.marker([lat,lng]).bindPopup(`<strong>${title}</strong><br>${company}<br>${esc(place || 'Konum doğrulandı')}<br>Güven: ${r.confidence_pct ?? '—'}`).addTo(markerLayer)
+        const drill = r.id ? `<br><button type="button" class="ghost fx-map-open" data-id="${esc(r.id)}">Tesis detayını aç →</button>` : ''
+        L.marker([lat,lng]).bindPopup(`<strong>${title}</strong><br>${company}<br>${esc(place || 'Konum doğrulandı')}<br>Güven: ${r.confidence_pct ?? '—'}${drill}`).addTo(markerLayer)
       })
       if(bounds.length) mapInstance.fitBounds(bounds,{padding:[20,20],maxZoom:9})
       setTimeout(()=>mapInstance.invalidateSize(),80)
@@ -142,6 +143,15 @@
     if(['contacts','projects'].includes(view)) setTimeout(()=>attachClientDrill(view),220)
   }
 
+  document.addEventListener('click',e=>{
+    const btn=e.target.closest?.('.fx-map-open')
+    if(!btn) return
+    const id=btn.dataset.id
+    if(id && typeof window.loadDetail==='function'){
+      window.loadDetail('facility',id,'map')
+      mapInstance?.closePopup()
+    }
+  })
   window.addEventListener('hashchange',sync)
   window.addEventListener('load',sync)
   document.addEventListener('visibilitychange',()=>{if(!document.hidden) sync()})

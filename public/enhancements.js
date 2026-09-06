@@ -5,7 +5,7 @@
   let mapInstance = null
   let markerLayer = null
 
-  const esc=(v='')=>String(v).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]))
+  const esc=(v='')=>String(v).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[s]))
   const fmtValue=(k,v)=>{
     if(v===null||v===undefined||v==='') return '—'
     if(k==='linkedin_url'||k==='source_url'||k==='website') return `<a href="${esc(v)}" target="_blank" rel="noopener">Aç</a>`
@@ -86,6 +86,16 @@
     return `<section class="detail-section"><h3>${esc(title)}</h3><div class="table-wrap"><table><thead><tr>${keys.map(k=>`<th>${esc(k)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${keys.map(k=>`<td>${fmtValue(k,r[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`
   }
 
+  function returnToList(parentView){
+    const target = `#${parentView}`
+    if(location.hash === target){
+      history.replaceState(null,'','#overview')
+      location.hash = target
+      return
+    }
+    location.hash = target
+  }
+
   async function showClientDetail(kind,row,parentView){
     document.getElementById('overviewView')?.classList.add('hidden')
     document.getElementById('dataView')?.classList.remove('hidden')
@@ -108,7 +118,7 @@
     }catch(err){ related=`<section class="detail-section"><h3>İlişkili kayıtlar</h3><div class="empty">İlişkili veri alınamadı: ${esc(err.message||err)}</div></section>` }
     if(actions){
       actions.innerHTML=`<button id="fxClientBack" class="ghost">← Listeye dön</button><button class="ghost" disabled title="Güvenli authenticated write endpoint hazırlanıyor">+ Temas Ekle</button><button class="ghost" disabled>+ Fırsat Aç</button><button class="ghost" disabled>+ Proje Oluştur</button><button class="ghost" disabled>+ Teklif Kaydet</button><button class="ghost" disabled>+ Görev Ata</button>${related}`
-      document.getElementById('fxClientBack')?.addEventListener('click',()=>window.load?window.load(parentView):location.hash=`#${parentView}`)
+      document.getElementById('fxClientBack')?.addEventListener('click',()=>returnToList(parentView))
     }
   }
 

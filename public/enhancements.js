@@ -4,8 +4,46 @@
   const AUTH_KEY_NAME = 'factory_xray_basic_auth'
   let mapInstance = null
   let markerLayer = null
+  let originalLoadDetail = null
+  let routingDetail = false
 
   const esc=(v='')=>String(v).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]))
+
+  function parseRoute(){
+    const raw=(location.hash||'#overview').slice(1)
+    const [viewPart,query='']=raw.split('?')
+    const params=new URLSearchParams(query)
+    return {view:viewPart||'overview',detail:params.get('detail'),id:params.get('id')}
+  }
+
+  function detailHash(parentView,kind,id){
+    return `#${encodeURIComponent(parentView||'overview')}?detail=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`
+  }
+
+  function installDetailRouting(){
+    if(originalLoadDetail || typeof window.loadDetail!=='function') return
+    originalLoadDetail=window.loadDetail
+    window.loadDetail=(kind,id,parentView='overview')=>{
+      if(!kind||!id) return
+      const next=detailHash(parentView,kind,id)
+      if(location.hash===next){
+        routingDetail=true
+        Promise.resolve(originalLoadDetail(kind,id,parentView)).finally(()=>{routingDetail=false})
+      }else{
+        location.hash=next
+      }
+    }
+  }
+
+  function routeDetail(){
+    installDetailRouting()
+    const {view,detail,id}=parseRoute()
+    if(!detail||!id||!originalLoadDetail||routingDetail) return
+    routingDetail=true
+    setTimeout(()=>{
+      Promise.resolve(originalLoadDetail(detail,id,view)).finally(()=>{routingDetail=false})
+    },90)
+  }
 
   async function fetchView(view){
     const auth=sessionStorage.getItem(AUTH_KEY_NAME)
@@ -75,12 +113,20 @@
   }
 
   function sync(){
-    const view=(location.hash||'#overview').slice(1).split('?')[0]
+    installDetailRouting()
+    const {view}=parseRoute()
     if(view===MAP_VIEW) setTimeout(showMap,120)
     else hideMap()
+    routeDetail()
   }
 
   document.addEventListener('click',e=>{
+    const back=e.target.closest?.('#detailBack')
+    if(back){
+      const {view}=parseRoute()
+      if(location.hash.includes('?detail=')) location.hash=`#${view}`
+      return
+    }
     const btn=e.target.closest?.('.fx-map-open')
     if(!btn) return
     const id=btn.dataset.id
@@ -88,8 +134,9 @@
       window.loadDetail('facility',id,'map')
       mapInstance?.closePopup()
     }
-  })
+  },true)
   window.addEventListener('hashchange',sync)
   window.addEventListener('load',sync)
   document.addEventListener('visibilitychange',()=>{if(!document.hidden) sync()})
+  installDetailRouting()
 })()

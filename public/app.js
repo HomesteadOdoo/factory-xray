@@ -126,11 +126,12 @@ function renderTable(view,data){
   const cols=tableConfig[view]||[]
   $('dataHead').innerHTML=`<tr>${cols.map(([,label])=>`<th>${escapeHtml(label)}</th>`).join('')}</tr>`
   const rows=data.rows||[]
-  const drill=['companies','facilities','opportunities'].includes(view)
-  $('dataRows').innerHTML=rows.length?rows.map(r=>`<tr${drill&&r.id?` class="drill-row" data-id="${escapeHtml(r.id)}" data-kind="${view==='companies'?'company':view==='facilities'?'facility':'opportunity'}" title="Detayı aç"`:''}>${cols.map(([key])=>`<td class="${['display_name','name','company','facility','full_name','title','quote_ref'].includes(key)?'strong':''}">${formatValue(key,r[key])}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${Math.max(cols.length,1)}" class="empty-cell">Henüz kayıt yok</td></tr>`
+  const drillKinds={companies:'company',facilities:'facility',opportunities:'opportunity',contacts:'contact',projects:'project'}
+  const kind=drillKinds[view]
+  $('dataRows').innerHTML=rows.length?rows.map(r=>`<tr${kind&&r.id?` class="drill-row" data-id="${escapeHtml(r.id)}" data-kind="${kind}" title="Detayı aç"`:''}>${cols.map(([key])=>`<td class="${['display_name','name','company','facility','full_name','title','quote_ref'].includes(key)?'strong':''}">${formatValue(key,r[key])}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${Math.max(cols.length,1)}" class="empty-cell">Henüz kayıt yok</td></tr>`
   const crmViews=['companies','facilities','opportunities']
   $('viewActions').innerHTML=crmViews.includes(view)?'<button class="ghost" disabled title="Güvenli write endpoint hazırlanıyor">+ Temas Ekle</button><button class="ghost" disabled>+ Fırsat Aç</button><button class="ghost" disabled>+ Proje Oluştur</button><button class="ghost" disabled>+ Teklif Kaydet</button><button class="ghost" disabled>+ Görev Ata</button>':''
-  document.querySelectorAll('.drill-row').forEach(row=>row.addEventListener('click',()=>loadDetail(row.dataset.kind,row.dataset.id,view)))
+  document.querySelectorAll('.drill-row').forEach(row=>row.addEventListener('click',e=>{if(e.target.closest('a,button'))return;loadDetail(row.dataset.kind,row.dataset.id,view)}))
 }
 
 function detailSection(title,rows){
@@ -144,13 +145,13 @@ async function loadDetail(kind,id,parentView){
   try{
     const data=await apiDetail(kind,id)
     $('overviewView').classList.add('hidden'); $('dataView').classList.remove('hidden')
-    $('viewTag').textContent='DETAIL'; $('viewTitle').textContent=data.record?.display_name||data.record?.name||data.record?.opportunity_type||'Detay'; $('viewSubtitle').textContent=`${kind.toUpperCase()} · ilişkili kayıtlar`; $('generatedAt').textContent=data.generatedAt?`Güncellendi: ${dtFmt.format(new Date(data.generatedAt))}`:''
+    $('viewTag').textContent='DETAIL'; $('viewTitle').textContent=data.record?.display_name||data.record?.full_name||data.record?.name||data.record?.opportunity_type||'Detay'; $('viewSubtitle').textContent=`${kind.toUpperCase()} · ilişkili kayıtlar`; $('generatedAt').textContent=data.generatedAt?`Güncellendi: ${dtFmt.format(new Date(data.generatedAt))}`:''
     const record=data.record||{}
     const rows=Object.entries(record).filter(([k])=>!['id'].includes(k)).map(([field,value])=>({field,value}))
     $('dataHead').innerHTML='<tr><th>Alan</th><th>Değer</th></tr>'
     $('dataRows').innerHTML=rows.map(r=>`<tr><td class="strong">${escapeHtml(r.field)}</td><td>${formatValue(r.field,r.value)}</td></tr>`).join('')
     const related=Object.entries(data).filter(([k,v])=>Array.isArray(v)&&v.length).map(([k,v])=>detailSection(k,v)).join('')
-    $('viewActions').innerHTML=`<button id="detailBack" class="ghost">← Listeye dön</button>${['company','facility','opportunity'].includes(kind)?'<button class="ghost" disabled>+ Temas Ekle</button><button class="ghost" disabled>+ Fırsat Aç</button><button class="ghost" disabled>+ Proje Oluştur</button><button class="ghost" disabled>+ Teklif Kaydet</button><button class="ghost" disabled>+ Görev Ata</button>':''}`+related
+    $('viewActions').innerHTML=`<button id="detailBack" class="ghost">← Listeye dön</button>${['company','facility','opportunity'].includes(kind)?'<button class="ghost" disabled title="Güvenli authenticated write endpoint hazırlanıyor">+ Temas Ekle</button><button class="ghost" disabled>+ Fırsat Aç</button><button class="ghost" disabled>+ Proje Oluştur</button><button class="ghost" disabled>+ Teklif Kaydet</button><button class="ghost" disabled>+ Görev Ata</button>':''}`+related
     $('detailBack').addEventListener('click',()=>load(parentView))
     setStatus('')
   }catch(err){console.error(err);setStatus('Detay verisi alınamadı.','error')}

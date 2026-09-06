@@ -20,6 +20,44 @@
     return `#${encodeURIComponent(parentView||'overview')}?detail=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`
   }
 
+  async function fetchDetailPayload(kind,id){
+    const auth=sessionStorage.getItem(AUTH_KEY_NAME)
+    if(!auth||!kind||!id) return null
+    const url=new URL(API)
+    url.searchParams.set('detail',kind)
+    url.searchParams.set('id',id)
+    const res=await fetch(url,{headers:{Authorization:`Basic ${auth}`},cache:'no-store'})
+    if(!res.ok) throw new Error(`API ${res.status}`)
+    return res.json()
+  }
+
+  const relatedKinds={facilities:['facility','facilities'],opportunities:['opportunity','opportunities'],opportunity:['opportunity','opportunities'],contacts:['contact','contacts'],projects:['project','projects']}
+
+  async function bindRelatedDrilldowns(detail,id){
+    try{
+      const payload=await fetchDetailPayload(detail,id)
+      if(!payload) return
+      document.querySelectorAll('.detail-section').forEach(section=>{
+        const title=section.querySelector('h3')?.textContent?.trim()
+        const route=relatedKinds[title]
+        const rows=payload[title]
+        if(!route||!Array.isArray(rows)) return
+        section.querySelectorAll('tbody tr').forEach((tr,index)=>{
+          const record=rows[index]
+          if(!record?.id||tr.dataset.fxDrillBound==='1') return
+          tr.dataset.fxDrillBound='1'
+          tr.classList.add('drill-row')
+          tr.tabIndex=0
+          tr.setAttribute('role','link')
+          tr.title='Detayı aç'
+          const open=()=>window.loadDetail?.(route[0],record.id,route[1])
+          tr.addEventListener('click',e=>{if(!e.target.closest('a,button'))open()})
+          tr.addEventListener('keydown',e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();open()}})
+        })
+      })
+    }catch(err){console.warn('Related drill-down binding skipped',err)}
+  }
+
   function installDetailRouting(){
     if(originalLoadDetail || typeof window.loadDetail!=='function') return
     originalLoadDetail=window.loadDetail
@@ -28,10 +66,8 @@
       const next=detailHash(parentView,kind,id)
       if(location.hash===next){
         routingDetail=true
-        Promise.resolve(originalLoadDetail(kind,id,parentView)).finally(()=>{routingDetail=false})
-      }else{
-        location.hash=next
-      }
+        Promise.resolve(originalLoadDetail(kind,id,parentView)).then(()=>bindRelatedDrilldowns(kind,id)).finally(()=>{routingDetail=false})
+      }else location.hash=next
     }
   }
 
@@ -40,9 +76,7 @@
     const {view,detail,id}=parseRoute()
     if(!detail||!id||!originalLoadDetail||routingDetail) return
     routingDetail=true
-    setTimeout(()=>{
-      Promise.resolve(originalLoadDetail(detail,id,view)).finally(()=>{routingDetail=false})
-    },90)
+    setTimeout(()=>{Promise.resolve(originalLoadDetail(detail,id,view)).then(()=>bindRelatedDrilldowns(detail,id)).finally(()=>{routingDetail=false})},90)
   }
 
   async function fetchView(view){
@@ -69,11 +103,7 @@
   }
 
   async function getRows(){ return (await fetchView('map')).rows || [] }
-
-  function hideMap(){
-    const panel = document.getElementById('fxMapPanel')
-    if(panel) panel.classList.add('hidden')
-  }
+  function hideMap(){const panel=document.getElementById('fxMapPanel');if(panel) panel.classList.add('hidden')}
 
   async function showMap(){
     const panel = ensurePanel(); if(!panel) return
@@ -107,33 +137,18 @@
       })
       if(bounds.length) mapInstance.fitBounds(bounds,{padding:[20,20],maxZoom:9})
       setTimeout(()=>mapInstance.invalidateSize(),80)
-    }catch(err){
-      target.innerHTML = `<div class="map-fallback">Harita verisi yüklenemedi: ${esc(err.message || err)}. Altındaki tablo kullanılabilir durumda.</div>`
-    }
+    }catch(err){target.innerHTML = `<div class="map-fallback">Harita verisi yüklenemedi: ${esc(err.message || err)}. Altındaki tablo kullanılabilir durumda.</div>`}
   }
 
-  function sync(){
-    installDetailRouting()
-    const {view}=parseRoute()
-    if(view===MAP_VIEW) setTimeout(showMap,120)
-    else hideMap()
-    routeDetail()
-  }
+  function sync(){installDetailRouting();const {view}=parseRoute();if(view===MAP_VIEW) setTimeout(showMap,120);else hideMap();routeDetail()}
 
   document.addEventListener('click',e=>{
     const back=e.target.closest?.('#detailBack')
-    if(back){
-      const {view}=parseRoute()
-      if(location.hash.includes('?detail=')) location.hash=`#${view}`
-      return
-    }
+    if(back){const {view}=parseRoute();if(location.hash.includes('?detail=')) location.hash=`#${view}`;return}
     const btn=e.target.closest?.('.fx-map-open')
     if(!btn) return
     const id=btn.dataset.id
-    if(id && typeof window.loadDetail==='function'){
-      window.loadDetail('facility',id,'map')
-      mapInstance?.closePopup()
-    }
+    if(id && typeof window.loadDetail==='function'){window.loadDetail('facility',id,'map');mapInstance?.closePopup()}
   },true)
   window.addEventListener('hashchange',sync)
   window.addEventListener('load',sync)

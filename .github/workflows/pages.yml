@@ -27,6 +27,20 @@ jobs:
         uses: actions/configure-pages@v5
         with:
           enablement: true
+      - name: Static integrity check
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s public/index.html
+          test -s public/app.js
+          test -s public/styles.css
+          grep -q 'id="nav"' public/index.html
+          grep -q 'factory-dashboard-api' public/app.js
+          grep -q "\['companies'" public/app.js
+          grep -q "\['facilities'" public/app.js
+          grep -q "\['opportunities'" public/app.js
+          grep -q "\['projects'" public/app.js
+          grep -q "\['health'" public/app.js
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
@@ -34,3 +48,20 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+      - name: Verify live dashboard
+        shell: bash
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          set -euo pipefail
+          base="${PAGE_URL%/}/"
+          curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "${base}" -o /tmp/index.html
+          curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "${base}app.js" -o /tmp/app.js
+          curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "${base}styles.css" -o /tmp/styles.css
+          grep -q 'Factory X-Ray' /tmp/index.html
+          grep -q 'factory-dashboard-api' /tmp/app.js
+          test -s /tmp/styles.css
+          api_code="$(curl --silent --output /tmp/api.json --write-out '%{http_code}' --retry 4 --retry-all-errors --retry-delay 3 'https://ycdrdcawvvspzilmzgjy.supabase.co/functions/v1/factory-dashboard-api')"
+          test "$api_code" = "401"
+          grep -q 'unauthorized' /tmp/api.json
+          echo "Live dashboard and protected Edge API are reachable."

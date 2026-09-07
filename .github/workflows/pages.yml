@@ -31,12 +31,15 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for asset in public/index.html public/app.js public/styles.css public/enhancements.js public/enhancements.css public/geography.js public/geography.css; do
+          for asset in public/index.html public/app.js public/styles.css public/routes.js public/enhancements.js public/enhancements.css public/geography.js public/geography.css public/kpis.js public/system-insights.js; do
             test -s "$asset" || { echo "Missing/empty dashboard asset: $asset"; exit 1; }
           done
           grep -q 'id="nav"' public/index.html
           grep -q 'factory-dashboard-api' public/app.js
           grep -q 'leaflet@1.9.4' public/index.html
+          grep -q 'routes.js' public/index.html
+          grep -q 'kpis.js' public/index.html
+          grep -q 'system-insights.js' public/index.html
           grep -q 'L.map' public/enhancements.js
           grep -q 'fxMapPanel' public/enhancements.js
 
@@ -76,23 +79,18 @@ jobs:
           curl_live() {
             curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "$1" -o "$2"
           }
-          curl_live "${base}" /tmp/index.html
-          curl_live "${base}app.js" /tmp/app.js
-          curl_live "${base}styles.css" /tmp/styles.css
-          curl_live "${base}enhancements.js" /tmp/enhancements.js
-          curl_live "${base}enhancements.css" /tmp/enhancements.css
-          curl_live "${base}geography.js" /tmp/geography.js
-          curl_live "${base}geography.css" /tmp/geography.css
+          for asset in index.html app.js styles.css routes.js enhancements.js enhancements.css geography.js geography.css kpis.js system-insights.js; do
+            curl_live "${base}${asset/index.html/}" "/tmp/${asset}"
+          done
 
           grep -q 'Factory X-Ray' /tmp/index.html
           grep -q 'factory-dashboard-api' /tmp/app.js
           grep -q 'leaflet@1.9.4' /tmp/index.html
+          grep -q 'routes.js' /tmp/index.html
+          grep -q 'kpis.js' /tmp/index.html
+          grep -q 'system-insights.js' /tmp/index.html
           grep -q 'L.map' /tmp/enhancements.js
           grep -q 'fxMapPanel' /tmp/enhancements.js
-          test -s /tmp/styles.css
-          test -s /tmp/enhancements.css
-          test -s /tmp/geography.js
-          test -s /tmp/geography.css
 
           # Confirm every required route shipped to the live artifact.
           for view in overview companies facilities geography sectors map opportunities pipeline contacts activities tasks proposals projects signals evidence sources coverage ingest quality health; do

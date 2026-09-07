@@ -131,13 +131,23 @@ function renderTable(view,data){
   $('dataRows').innerHTML=rows.length?rows.map(r=>`<tr${kind&&r.id?` class="drill-row" data-id="${escapeHtml(r.id)}" data-kind="${kind}" title="Detayı aç"`:''}>${cols.map(([key])=>`<td class="${['display_name','name','company','facility','full_name','title','quote_ref'].includes(key)?'strong':''}">${formatValue(key,r[key])}</td>`).join('')}</tr>`).join(''):`<tr><td colspan="${Math.max(cols.length,1)}" class="empty-cell">Henüz kayıt yok</td></tr>`
   const crmViews=['companies','facilities','opportunities']
   $('viewActions').innerHTML=crmViews.includes(view)?'<button class="ghost" disabled title="Güvenli write endpoint hazırlanıyor">+ Temas Ekle</button><button class="ghost" disabled>+ Fırsat Aç</button><button class="ghost" disabled>+ Proje Oluştur</button><button class="ghost" disabled>+ Teklif Kaydet</button><button class="ghost" disabled>+ Görev Ata</button>':''
-  document.querySelectorAll('.drill-row').forEach(row=>row.addEventListener('click',e=>{if(e.target.closest('a,button'))return;loadDetail(row.dataset.kind,row.dataset.id,view)}))
+  bindDrillRows(view)
 }
 
-function detailSection(title,rows){
+const relationKinds={facilities:'facility',contacts:'contact',opportunities:'opportunity',projects:'project',opportunity:'opportunity'}
+
+function bindDrillRows(parentView){
+  document.querySelectorAll('.drill-row').forEach(row=>row.addEventListener('click',e=>{
+    if(e.target.closest('a,button'))return
+    loadDetail(row.dataset.kind,row.dataset.id,parentView)
+  }))
+}
+
+function detailSection(title,rows,parentView){
   if(!rows?.length) return `<section class="detail-section"><h3>${escapeHtml(title)}</h3><div class="empty">Kayıt yok</div></section>`
   const keys=Object.keys(rows[0]).filter(k=>k!=='id').slice(0,8)
-  return `<section class="detail-section"><h3>${escapeHtml(title)}</h3><div class="table-wrap"><table><thead><tr>${keys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${keys.map(k=>`<td>${formatValue(k,r[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`
+  const relatedKind=relationKinds[title]||''
+  return `<section class="detail-section"><h3>${escapeHtml(title)}</h3><div class="table-wrap"><table><thead><tr>${keys.map(k=>`<th>${escapeHtml(k)}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr${relatedKind&&r.id?` class="drill-row" data-id="${escapeHtml(r.id)}" data-kind="${relatedKind}" title="İlişkili detayı aç"`:''}>${keys.map(k=>`<td>${formatValue(k,r[k])}</td>`).join('')}</tr>`).join('')}</tbody></table></div></section>`
 }
 
 async function loadDetail(kind,id,parentView){
@@ -150,9 +160,10 @@ async function loadDetail(kind,id,parentView){
     const rows=Object.entries(record).filter(([k])=>!['id'].includes(k)).map(([field,value])=>({field,value}))
     $('dataHead').innerHTML='<tr><th>Alan</th><th>Değer</th></tr>'
     $('dataRows').innerHTML=rows.map(r=>`<tr><td class="strong">${escapeHtml(r.field)}</td><td>${formatValue(r.field,r.value)}</td></tr>`).join('')
-    const related=Object.entries(data).filter(([k,v])=>Array.isArray(v)&&v.length).map(([k,v])=>detailSection(k,v)).join('')
+    const related=Object.entries(data).filter(([k,v])=>Array.isArray(v)&&v.length).map(([k,v])=>detailSection(k,v,parentView)).join('')
     $('viewActions').innerHTML=`<button id="detailBack" class="ghost">← Listeye dön</button>${['company','facility','opportunity'].includes(kind)?'<button class="ghost" disabled title="Güvenli authenticated write endpoint hazırlanıyor">+ Temas Ekle</button><button class="ghost" disabled>+ Fırsat Aç</button><button class="ghost" disabled>+ Proje Oluştur</button><button class="ghost" disabled>+ Teklif Kaydet</button><button class="ghost" disabled>+ Görev Ata</button>':''}`+related
     $('detailBack').addEventListener('click',()=>load(parentView))
+    bindDrillRows(parentView)
     setStatus('')
   }catch(err){console.error(err);setStatus('Detay verisi alınamadı.','error')}
   finally{$('refreshBtn').disabled=false}

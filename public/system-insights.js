@@ -19,9 +19,11 @@
     document.head.appendChild(s);
   }
 
-  async function overview(){
+  async function fetchView(view='overview'){
     const auth=sessionStorage.getItem(AUTH_KEY); if(!auth) return null;
-    const r=await fetch(API,{headers:{Authorization:`Basic ${auth}`},cache:'no-store'});
+    const url=new URL(API);
+    if(view!=='overview') url.searchParams.set('view',view);
+    const r=await fetch(url,{headers:{Authorization:`Basic ${auth}`},cache:'no-store'});
     if(!r.ok) throw new Error(`API ${r.status}`);
     return r.json();
   }
@@ -41,7 +43,7 @@
     if(!['ingest','quality'].includes(view)){if(old)old.remove();return}
     installStyle();
     try{
-      const d=await overview(); if(!d) return;
+      const d=await fetchView(); if(!d) return;
       if(view==='ingest'){
         const now=Date.now(), rows=d.ingest||[];
         const sum=(hours,key)=>rows.filter(x=>x.bucket&&now-new Date(x.bucket).getTime()<=hours*3600000).reduce((a,x)=>a+Number(x[key]||0),0);
@@ -55,11 +57,27 @@
       } else {
         const q=d.quality||{}, total=Number(q.total||0);
         const pct=(n)=>total?`${((Number(n||0)/total)*100).toFixed(1)}%`:'—';
+        const evidence=await fetchView('evidence');
+        const erows=evidence?.rows||[];
+        const classes=erows.reduce((acc,row)=>{
+          const key=String(row.evidence_status||'UNCLASSIFIED').trim().toUpperCase();
+          acc[key]=(acc[key]||0)+1;
+          return acc;
+        },{});
+        const fact=classes.FACT||0;
+        const inferred=classes.INFERRED||0;
+        const ai=classes.AI_ESTIMATE||0;
+        const classified=fact+inferred+ai;
+        const other=Math.max(0,erows.length-classified);
         mount(`
           <div class="system-insight good"><span>Ortalama confidence</span><strong>${q.avg_confidence==null?'—':esc(q.avg_confidence)+'%'}</strong><small>${fmt.format(total)} tesis</small></div>
           <div class="system-insight ${q.missing_district?'warn':''}"><span>İlçe eksik</span><strong>${fmt.format(q.missing_district||0)}</strong><small>${pct(q.missing_district)} tesis</small></div>
           <div class="system-insight ${q.missing_osb?'warn':''}"><span>OSB / bölge eksik</span><strong>${fmt.format(q.missing_osb||0)}</strong><small>${pct(q.missing_osb)} tesis</small></div>
-          <div class="system-insight ${q.missing_confidence?'warn':''}"><span>Confidence eksik</span><strong>${fmt.format(q.missing_confidence||0)}</strong><small>${pct(q.missing_confidence)} tesis</small></div>`);
+          <div class="system-insight ${q.missing_confidence?'warn':''}"><span>Confidence eksik</span><strong>${fmt.format(q.missing_confidence||0)}</strong><small>${pct(q.missing_confidence)} tesis</small></div>
+          <div class="system-insight good"><span>FACT kanıt</span><strong>${fmt.format(fact)}</strong><small>doğrulanmış olgu</small></div>
+          <div class="system-insight"><span>INFERRED kanıt</span><strong>${fmt.format(inferred)}</strong><small>çıkarımsal kayıt</small></div>
+          <div class="system-insight"><span>AI_ESTIMATE</span><strong>${fmt.format(ai)}</strong><small>AI tahmini</small></div>
+          <div class="system-insight ${other?'warn':''}"><span>Sınıflanmamış / diğer</span><strong>${fmt.format(other)}</strong><small>${fmt.format(erows.length)} evidence içinde</small></div>`);
       }
     }catch(e){
       mount(`<div class="system-insight warn"><span>Özet durumu</span><strong>Veri alınamadı</strong><small>${esc(e.message||e)}</small></div>`);

@@ -5,6 +5,13 @@
 
   const baseLoad = load
   const baseLoadDetail = loadDetail
+  const inlineRelationKinds = {
+    company_id: 'company',
+    facility_id: 'facility',
+    primary_contact_id: 'contact',
+    opportunity_id: 'opportunity',
+    project_id: 'project',
+  }
 
   function routeState() {
     const raw = (location.hash || '#overview').slice(1)
@@ -21,11 +28,33 @@
     return `#${encodeURIComponent(parentView)}?detail=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`
   }
 
+  function installInlineRelationLinks(parentView) {
+    document.querySelectorAll('#dataRows tr').forEach((row) => {
+      const cells = row.querySelectorAll('td')
+      if (cells.length < 2) return
+      const field = cells[0].textContent?.trim() || ''
+      const kind = inlineRelationKinds[field]
+      if (!kind) return
+      const id = cells[1].textContent?.trim() || ''
+      if (!id || id === '—') return
+      const href = detailHash(parentView, kind, id)
+      cells[1].innerHTML = ''
+      const link = document.createElement('a')
+      link.href = href
+      link.className = 'panel-link'
+      link.textContent = `${id} →`
+      link.title = `${kind} detayını aç`
+      cells[1].appendChild(link)
+    })
+  }
+
   load = async function routedLoad(view = currentView()) {
     const state = routeState()
     const parentView = view || state.view
     if (state.detail && state.id && state.view === parentView) {
-      return baseLoadDetail(state.detail, state.id, parentView)
+      const result = await baseLoadDetail(state.detail, state.id, parentView)
+      installInlineRelationLinks(parentView)
+      return result
     }
     return baseLoad(parentView)
   }
@@ -36,7 +65,9 @@
       location.hash = target
       return
     }
-    return baseLoadDetail(kind, id, parentView)
+    const result = await baseLoadDetail(kind, id, parentView)
+    installInlineRelationLinks(parentView)
+    return result
   }
 
   // The original detail renderer binds a list-back handler directly. Capture

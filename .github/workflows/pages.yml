@@ -36,11 +36,24 @@ jobs:
           test -s public/styles.css
           grep -q 'id="nav"' public/index.html
           grep -q 'factory-dashboard-api' public/app.js
-          grep -q "\['companies'" public/app.js
-          grep -q "\['facilities'" public/app.js
-          grep -q "\['opportunities'" public/app.js
-          grep -q "\['projects'" public/app.js
-          grep -q "\['health'" public/app.js
+
+          # Every required dashboard route must exist in the navigation registry.
+          for view in overview companies facilities geography sectors map opportunities pipeline contacts activities tasks proposals projects signals evidence sources coverage ingest quality health; do
+            grep -q "\['${view}'" public/app.js || { echo "Missing dashboard view: ${view}"; exit 1; }
+          done
+
+          # Detail/drill-down support must remain present for core CRM entities.
+          grep -q "companies:'company'" public/app.js
+          grep -q "facilities:'facility'" public/app.js
+          grep -q "opportunities:'opportunity'" public/app.js
+          grep -q "contacts:'contact'" public/app.js
+          grep -q "projects:'project'" public/app.js
+
+          # Frontend must never contain Supabase service-role credentials.
+          if grep -Eqi 'service[_-]?role|SUPABASE_SERVICE_ROLE|eyJ[a-zA-Z0-9_-]{20,}' public/index.html public/app.js public/styles.css; then
+            echo 'Potential privileged credential material detected in public assets.'
+            exit 1
+          fi
       - name: Upload static site
         uses: actions/upload-pages-artifact@v3
         with:
@@ -61,7 +74,14 @@ jobs:
           grep -q 'Factory X-Ray' /tmp/index.html
           grep -q 'factory-dashboard-api' /tmp/app.js
           test -s /tmp/styles.css
+
+          # Confirm every required route shipped to the live artifact.
+          for view in overview companies facilities geography sectors map opportunities pipeline contacts activities tasks proposals projects signals evidence sources coverage ingest quality health; do
+            grep -q "\['${view}'" /tmp/app.js || { echo "Live artifact missing view: ${view}"; exit 1; }
+          done
+
+          # Edge API must be reachable but protected when called without auth.
           api_code="$(curl --silent --output /tmp/api.json --write-out '%{http_code}' --retry 4 --retry-all-errors --retry-delay 3 'https://ycdrdcawvvspzilmzgjy.supabase.co/functions/v1/factory-dashboard-api')"
           test "$api_code" = "401"
           grep -q 'unauthorized' /tmp/api.json
-          echo "Live dashboard and protected Edge API are reachable."
+          echo "Live dashboard, complete navigation registry, and protected Edge API are reachable."

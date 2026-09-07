@@ -31,11 +31,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test -s public/index.html
-          test -s public/app.js
-          test -s public/styles.css
+          for asset in public/index.html public/app.js public/styles.css public/enhancements.js public/enhancements.css public/geography.js public/geography.css; do
+            test -s "$asset" || { echo "Missing/empty dashboard asset: $asset"; exit 1; }
+          done
           grep -q 'id="nav"' public/index.html
           grep -q 'factory-dashboard-api' public/app.js
+          grep -q 'leaflet@1.9.4' public/index.html
+          grep -q 'L.map' public/enhancements.js
+          grep -q 'fxMapPanel' public/enhancements.js
 
           # Every required dashboard route must exist in the navigation registry.
           for view in overview companies facilities geography sectors map opportunities pipeline contacts activities tasks proposals projects signals evidence sources coverage ingest quality health; do
@@ -48,9 +51,11 @@ jobs:
           grep -q "opportunities:'opportunity'" public/app.js
           grep -q "contacts:'contact'" public/app.js
           grep -q "projects:'project'" public/app.js
+          grep -q 'detailHash' public/enhancements.js
+          grep -q 'bindRelatedDrilldowns' public/enhancements.js
 
-          # Frontend must never contain Supabase service-role credentials.
-          if grep -Eqi 'service[_-]?role|SUPABASE_SERVICE_ROLE|eyJ[a-zA-Z0-9_-]{20,}' public/index.html public/app.js public/styles.css; then
+          # Frontend must never contain Supabase service-role credentials or JWT-like secret material.
+          if grep -Eqi 'service[_-]?role|SUPABASE_SERVICE_ROLE|eyJ[a-zA-Z0-9_-]{20,}' public/*.html public/*.js public/*.css; then
             echo 'Potential privileged credential material detected in public assets.'
             exit 1
           fi
@@ -68,20 +73,38 @@ jobs:
         run: |
           set -euo pipefail
           base="${PAGE_URL%/}/"
-          curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "${base}" -o /tmp/index.html
-          curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "${base}app.js" -o /tmp/app.js
-          curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "${base}styles.css" -o /tmp/styles.css
+          curl_live() {
+            curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "$1" -o "$2"
+          }
+          curl_live "${base}" /tmp/index.html
+          curl_live "${base}app.js" /tmp/app.js
+          curl_live "${base}styles.css" /tmp/styles.css
+          curl_live "${base}enhancements.js" /tmp/enhancements.js
+          curl_live "${base}enhancements.css" /tmp/enhancements.css
+          curl_live "${base}geography.js" /tmp/geography.js
+          curl_live "${base}geography.css" /tmp/geography.css
+
           grep -q 'Factory X-Ray' /tmp/index.html
           grep -q 'factory-dashboard-api' /tmp/app.js
+          grep -q 'leaflet@1.9.4' /tmp/index.html
+          grep -q 'L.map' /tmp/enhancements.js
+          grep -q 'fxMapPanel' /tmp/enhancements.js
           test -s /tmp/styles.css
+          test -s /tmp/enhancements.css
+          test -s /tmp/geography.js
+          test -s /tmp/geography.css
 
           # Confirm every required route shipped to the live artifact.
           for view in overview companies facilities geography sectors map opportunities pipeline contacts activities tasks proposals projects signals evidence sources coverage ingest quality health; do
             grep -q "\['${view}'" /tmp/app.js || { echo "Live artifact missing view: ${view}"; exit 1; }
           done
 
+          # Confirm drill-down and map functionality shipped with the live artifact.
+          grep -q 'detailHash' /tmp/enhancements.js
+          grep -q 'bindRelatedDrilldowns' /tmp/enhancements.js
+
           # Edge API must be reachable but protected when called without auth.
           api_code="$(curl --silent --output /tmp/api.json --write-out '%{http_code}' --retry 4 --retry-all-errors --retry-delay 3 'https://ycdrdcawvvspzilmzgjy.supabase.co/functions/v1/factory-dashboard-api')"
           test "$api_code" = "401"
-          grep -q 'unauthorized' /tmp/api.json
-          echo "Live dashboard, complete navigation registry, and protected Edge API are reachable."
+          grep -qi 'unauthorized' /tmp/api.json
+          echo "Live dashboard, all critical assets, map/drill-down code, complete navigation registry, and protected Edge API are reachable."

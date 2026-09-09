@@ -49,7 +49,12 @@
         const sum=(hours,key)=>rows.filter(x=>x.bucket&&now-new Date(x.bucket).getTime()<=hours*3600000).reduce((a,x)=>a+Number(x[key]||0),0);
         const a24=sum(24,'added'),u24=sum(24,'updated'),r24=sum(24,'rejected');
         const a7=sum(168,'added'),u7=sum(168,'updated'),r7=sum(168,'rejected');
+        const latestMs=rows.reduce((m,x)=>x.bucket?Math.max(m,new Date(x.bucket).getTime()||0):m,0);
+        const freshnessHours=latestMs?Math.max(0,(now-latestMs)/3600000):null;
+        const freshnessText=freshnessHours==null?'Yok':freshnessHours<1?`${Math.max(1,Math.round(freshnessHours*60))} dk`:`${freshnessHours.toFixed(1)} sa`;
+        const freshnessWarn=freshnessHours==null||freshnessHours>2;
         mount(`
+          <div class="system-insight ${freshnessWarn?'warn':'good'}"><span>Veri tazeliği</span><strong>${esc(freshnessText)}</strong><small>${freshnessWarn?'Son ingest 2 saati aştı':'Saatlik ingest akışı güncel'}</small></div>
           <div class="system-insight good"><span>Son 24 saat · eklenen</span><strong>+${fmt.format(a24)}</strong><small>${fmt.format(u24)} güncelleme</small></div>
           <div class="system-insight ${r24?'warn':''}"><span>Son 24 saat · reddedilen</span><strong>${fmt.format(r24)}</strong><small>ingest kalite kontrolü</small></div>
           <div class="system-insight good"><span>Son 7 gün · eklenen</span><strong>+${fmt.format(a7)}</strong><small>${fmt.format(u7)} güncelleme</small></div>

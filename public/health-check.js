@@ -1,0 +1,102 @@
+(() => {
+  const API = 'https://ycdrdcawvvspzilmzgjy.supabase.co/functions/v1/factory-dashboard-api'
+  const AUTH_KEY = 'factory_xray_basic_auth'
+  const VIEWS = ['overview','companies','facilities','geography','sectors','map','opportunities','pipeline','contacts','activities','tasks','proposals','projects','signals','evidence','sources','coverage','ingest','quality','health']
+  let running = false
+
+  const esc = (v='') => String(v).replace(/[&<>"']/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]))
+
+  function installStyle(){
+    if(document.getElementById('fxHealthStyle')) return
+    const style = document.createElement('style')
+    style.id = 'fxHealthStyle'
+    style.textContent = `
+      .health-grid{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin:0 0 18px}
+      .health-card{border:1px solid var(--line,#243344);border-radius:12px;padding:14px;background:rgba(255,255,255,.025)}
+      .health-card span{display:block;font-size:11px;letter-spacing:.08em;text-transform:uppercase;opacity:.68;margin-bottom:7px}
+      .health-card strong{font-size:20px}.health-card small{display:block;margin-top:6px;opacity:.65;line-height:1.35}
+      .health-good strong{color:#7fe3af}.health-warn strong{color:#ffba6b}.health-bad strong{color:#ff7d7d}
+      .health-routes{display:flex;flex-wrap:wrap;gap:7px;margin:0 0 18px}
+      .health-chip{font-size:11px;padding:6px 8px;border-radius:999px;border:1px solid var(--line,#243344);background:rgba(255,255,255,.025)}
+      .health-chip.good{border-color:rgba(127,227,175,.45)}.health-chip.bad{border-color:rgba(255,125,125,.55);color:#ff9c9c}
+      @media(max-width:900px){.health-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+      @media(max-width:560px){.health-grid{grid-template-columns:1fr}}
+    `
+    document.head.appendChild(style)
+  }
+
+  function currentView(){ return (location.hash || '#overview').slice(1).split('?')[0] }
+
+  function mount(){
+    const panel = document.querySelector('#dataView .panel.wide')
+    const actions = document.getElementById('viewActions')
+    if(!panel || !actions) return null
+    let root = document.getElementById('fxHealthCheck')
+    if(!root){
+      root = document.createElement('section')
+      root.id = 'fxHealthCheck'
+      actions.insertAdjacentElement('afterend', root)
+    }
+    return root
+  }
+
+  async function requestView(view, auth){
+    const url = new URL(API)
+    if(view !== 'overview') url.searchParams.set('view', view)
+    const started = performance.now()
+    const res = await fetch(url, {headers:{Authorization:`Basic ${auth}`}, cache:'no-store'})
+    const elapsed = Math.round(performance.now() - started)
+    let body = null
+    try { body = await res.json() } catch {}
+    return { view, ok: res.ok && body?.ok === true, status: res.status, elapsed, generatedAt: body?.generatedAt || null }
+  }
+
+  async function run(){
+    if(currentView() !== 'health' || running) return
+    const auth = sessionStorage.getItem(AUTH_KEY)
+    const root = mount()
+    if(!root) return
+    installStyle()
+    if(!auth){ root.innerHTML = '<div class="health-card health-warn"><strong>Giriş gerekli</strong><small>Health self-test authenticated API erişimi gerektirir.</small></div>'; return }
+
+    running = true
+    root.innerHTML = '<div class="health-card"><strong>Kontrol ediliyor…</strong><small>Tüm dashboard API view’ları uçtan uca test ediliyor.</small></div>'
+    try{
+      const results = []
+      for(const view of VIEWS){
+        try { results.push(await requestView(view, auth)) }
+        catch(e){ results.push({view,ok:false,status:0,elapsed:0,error:e?.message || String(e)}) }
+      }
+      let build = '—'
+      let assetOk = false
+      try{
+        const r = await fetch('./build-version.txt', {cache:'no-store'})
+        assetOk = r.ok
+        if(r.ok) build = (await r.text()).trim().split('\n')[0] || 'ok'
+      }catch{}
+
+      const failed = results.filter(r => !r.ok)
+      const avg = results.length ? Math.round(results.reduce((a,r)=>a+(r.elapsed||0),0)/results.length) : 0
+      const newest = results.map(r=>r.generatedAt).filter(Boolean).sort().at(-1)
+      const statusClass = failed.length ? 'health-bad' : 'health-good'
+      root.innerHTML = `
+        <div class="health-grid">
+          <div class="health-card ${statusClass}"><span>API route sağlığı</span><strong>${failed.length ? `${failed.length} hata` : '20/20 OK'}</strong><small>${failed.length ? 'Kırık endpoint aşağıda işaretli' : 'Tüm kayıtlı dashboard view’ları cevap veriyor'}</small></div>
+          <div class="health-card ${assetOk?'health-good':'health-bad'}"><span>Frontend asset</span><strong>${assetOk?'OK':'Hata'}</strong><small>${esc(build)}</small></div>
+          <div class="health-card"><span>Ort. API gecikmesi</span><strong>${avg} ms</strong><small>Tarayıcıdan Edge Function round-trip</small></div>
+          <div class="health-card ${newest?'health-good':'health-warn'}"><span>API freshness</span><strong>${newest?'Canlı':'Bilinmiyor'}</strong><small>${newest ? esc(new Date(newest).toLocaleString('tr-TR')) : 'generatedAt alınamadı'}</small></div>
+        </div>
+        <div class="health-routes">${results.map(r=>`<span class="health-chip ${r.ok?'good':'bad'}" title="HTTP ${r.status}${r.error?` · ${esc(r.error)}`:''}">${esc(r.view)} · ${r.ok?'OK':`HTTP ${r.status||'ERR'}`}</span>`).join('')}</div>`
+    } finally { running = false }
+  }
+
+  function sync(){
+    const old = document.getElementById('fxHealthCheck')
+    if(currentView() !== 'health'){ if(old) old.remove(); return }
+    setTimeout(run, 260)
+  }
+
+  window.addEventListener('hashchange', sync)
+  window.addEventListener('load', sync)
+  document.getElementById('refreshBtn')?.addEventListener('click', () => setTimeout(run, 500))
+})()

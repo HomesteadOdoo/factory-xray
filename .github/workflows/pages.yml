@@ -23,6 +23,16 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Stamp dashboard build metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat > public/build-version.txt <<EOF
+          Factory X-Ray dashboard build
+          commit: $GITHUB_SHA
+          built_at_utc: $(date -u +'%Y-%m-%dT%H:%M:%SZ')
+          features: contact-detail, project-detail, live-map, health-self-test
+          EOF
       - name: Configure Pages
         uses: actions/configure-pages@v5
         with:
@@ -34,6 +44,8 @@ jobs:
           for asset in public/index.html public/app.js public/styles.css public/routes.js public/enhancements.js public/enhancements.css public/geography.js public/geography.css public/kpis.js public/system-insights.js public/health-check.js public/build-version.txt; do
             test -s "$asset" || { echo "Missing/empty dashboard asset: $asset"; exit 1; }
           done
+
+          grep -q "commit: $GITHUB_SHA" public/build-version.txt
 
           # Catch browser-breaking JavaScript syntax errors before deployment.
           for js in public/app.js public/routes.js public/enhancements.js public/geography.js public/kpis.js public/system-insights.js public/health-check.js; do
@@ -116,6 +128,7 @@ jobs:
           done
 
           grep -q 'Factory X-Ray' /tmp/index.html
+          grep -q "commit: $GITHUB_SHA" /tmp/build-version.txt
           grep -q 'factory-dashboard-api' /tmp/app.js
           grep -q 'leaflet@1.9.4' /tmp/index.html
           grep -q 'routes.js' /tmp/index.html
@@ -159,4 +172,4 @@ jobs:
           grep -Eqi '^access-control-allow-methods:.*GET' /tmp/api-options.headers
           grep -Eqi '^access-control-allow-headers:.*authorization' /tmp/api-options.headers
 
-          echo "Live dashboard assets parse successfully; navigation/drill-down/health checks are present; protected Edge API and browser CORS preflight are healthy."
+          echo "Live dashboard assets and exact build SHA verified; navigation/drill-down/health checks are present; protected Edge API and browser CORS preflight are healthy."

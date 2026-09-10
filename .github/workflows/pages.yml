@@ -31,12 +31,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for asset in public/index.html public/app.js public/styles.css public/routes.js public/enhancements.js public/enhancements.css public/geography.js public/geography.css public/kpis.js public/system-insights.js; do
+          for asset in public/index.html public/app.js public/styles.css public/routes.js public/enhancements.js public/enhancements.css public/geography.js public/geography.css public/kpis.js public/system-insights.js public/health-check.js public/build-version.txt; do
             test -s "$asset" || { echo "Missing/empty dashboard asset: $asset"; exit 1; }
           done
 
           # Catch browser-breaking JavaScript syntax errors before deployment.
-          for js in public/app.js public/routes.js public/enhancements.js public/geography.js public/kpis.js public/system-insights.js; do
+          for js in public/app.js public/routes.js public/enhancements.js public/geography.js public/kpis.js public/system-insights.js public/health-check.js; do
             node --check "$js"
           done
 
@@ -46,8 +46,10 @@ jobs:
           grep -q 'routes.js' public/index.html
           grep -q 'kpis.js' public/index.html
           grep -q 'system-insights.js' public/index.html
+          grep -q 'health-check.js' public/index.html
           grep -q 'L.map' public/enhancements.js
           grep -q 'fxMapPanel' public/enhancements.js
+          grep -q "const VIEWS = \['overview'" public/health-check.js
 
           # Every required dashboard route must exist in the navigation registry.
           for view in overview companies facilities geography sectors map opportunities pipeline contacts activities tasks proposals projects signals evidence sources coverage ingest quality health; do
@@ -60,7 +62,10 @@ jobs:
           from pathlib import Path
           app = Path('public/app.js').read_text()
           html = Path('public/index.html').read_text()
-          views = set(re.findall(r"\['([a-z][a-z0-9_-]*)','", app))
+          match = re.search(r"const views = \[(.*?)\]\n\nconst tableConfig", app, re.S)
+          if not match:
+              raise SystemExit('Could not locate dashboard views registry')
+          views = set(re.findall(r"\['([a-z][a-z0-9_-]*)','", match.group(1)))
           links = set(re.findall(r'href="#([a-z][a-z0-9_-]*)"', html))
           missing = sorted(links - views)
           if missing:
@@ -106,7 +111,7 @@ jobs:
           curl_live() {
             curl --fail --silent --show-error --location --retry 6 --retry-all-errors --retry-delay 5 "$1" -o "$2"
           }
-          for asset in index.html app.js styles.css routes.js enhancements.js enhancements.css geography.js geography.css kpis.js system-insights.js; do
+          for asset in index.html app.js styles.css routes.js enhancements.js enhancements.css geography.js geography.css kpis.js system-insights.js health-check.js build-version.txt; do
             curl_live "${base}${asset/index.html/}" "/tmp/${asset}"
           done
 
@@ -116,11 +121,13 @@ jobs:
           grep -q 'routes.js' /tmp/index.html
           grep -q 'kpis.js' /tmp/index.html
           grep -q 'system-insights.js' /tmp/index.html
+          grep -q 'health-check.js' /tmp/index.html
           grep -q 'L.map' /tmp/enhancements.js
           grep -q 'fxMapPanel' /tmp/enhancements.js
+          grep -q "const VIEWS = \['overview'" /tmp/health-check.js
 
           # Verify the actually deployed JavaScript parses successfully too.
-          for js in /tmp/app.js /tmp/routes.js /tmp/enhancements.js /tmp/geography.js /tmp/kpis.js /tmp/system-insights.js; do
+          for js in /tmp/app.js /tmp/routes.js /tmp/enhancements.js /tmp/geography.js /tmp/kpis.js /tmp/system-insights.js /tmp/health-check.js; do
             node --check "$js"
           done
 
@@ -129,9 +136,10 @@ jobs:
             grep -q "\['${view}'" /tmp/app.js || { echo "Live artifact missing view: ${view}"; exit 1; }
           done
 
-          # Confirm drill-down and map functionality shipped with the live artifact.
+          # Confirm drill-down, map and health self-test functionality shipped with the live artifact.
           grep -q 'detailHash' /tmp/enhancements.js
           grep -q 'bindRelatedDrilldowns' /tmp/enhancements.js
+          grep -q '20/20 OK' /tmp/health-check.js
 
           api='https://ycdrdcawvvspzilmzgjy.supabase.co/functions/v1/factory-dashboard-api'
 
@@ -151,4 +159,4 @@ jobs:
           grep -Eqi '^access-control-allow-methods:.*GET' /tmp/api-options.headers
           grep -Eqi '^access-control-allow-headers:.*authorization' /tmp/api-options.headers
 
-          echo "Live dashboard assets parse successfully; navigation/drill-down code is present; protected Edge API and browser CORS preflight are healthy."
+          echo "Live dashboard assets parse successfully; navigation/drill-down/health checks are present; protected Edge API and browser CORS preflight are healthy."

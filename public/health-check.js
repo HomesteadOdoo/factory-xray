@@ -60,7 +60,10 @@
     const url = new URL(API)
     if(view !== 'overview') url.searchParams.set('view', view)
     const {res, body, elapsed} = await requestJson(url, auth)
-    return { view, ok: res.ok && body?.ok === true, status: res.status, elapsed, generatedAt: body?.generatedAt || null }
+    const latestDataUpdate = view === 'health'
+      ? (body?.rows || []).map(r => r?.latest_update).filter(Boolean).sort().at(-1) || null
+      : null
+    return { view, ok: res.ok && body?.ok === true, status: res.status, elapsed, generatedAt: body?.generatedAt || null, latestDataUpdate }
   }
 
   async function requestDetailSample(listView, kind, auth){
@@ -82,6 +85,17 @@
       elapsed: list.elapsed + detail.elapsed,
       generatedAt: detail.body?.generatedAt || null,
     }
+  }
+
+  function freshnessMeta(timestamp){
+    if(!timestamp) return {klass:'health-warn', label:'Bilinmiyor', detail:'latest_update alınamadı'}
+    const t = new Date(timestamp).getTime()
+    if(Number.isNaN(t)) return {klass:'health-warn', label:'Bilinmiyor', detail:String(timestamp)}
+    const ageMs = Math.max(0, Date.now() - t)
+    const ageHours = ageMs / 3600000
+    const label = ageHours < 1 ? `${Math.max(1,Math.round(ageMs/60000))} dk` : ageHours < 48 ? `${Math.round(ageHours)} sa` : `${Math.round(ageHours/24)} gün`
+    const klass = ageHours <= 24 ? 'health-good' : ageHours <= 72 ? 'health-warn' : 'health-bad'
+    return {klass, label, detail:`Son gerçek veri güncellemesi: ${new Date(t).toLocaleString('tr-TR')}`}
   }
 
   async function run(){
@@ -120,7 +134,8 @@
       const testedDetails = details.filter(r => !r.skipped)
       const allTimings = [...results, ...testedDetails]
       const avg = allTimings.length ? Math.round(allTimings.reduce((a,r)=>a+(r.elapsed||0),0)/allTimings.length) : 0
-      const newest = [...results, ...details].map(r=>r.generatedAt).filter(Boolean).sort().at(-1)
+      const latestDataUpdate = results.find(r => r.view === 'health')?.latestDataUpdate || null
+      const freshness = freshnessMeta(latestDataUpdate)
       const statusClass = failed.length ? 'health-bad' : 'health-good'
       const detailClass = failedDetails.length ? 'health-bad' : (testedDetails.length === DETAIL_VIEWS.length ? 'health-good' : 'health-warn')
       root.innerHTML = `
@@ -129,7 +144,7 @@
           <div class="health-card ${detailClass}"><span>Detay drill-down</span><strong>${failedDetails.length ? `${failedDetails.length} hata` : `${testedDetails.length}/5 OK`}</strong><small>${testedDetails.length === DETAIL_VIEWS.length ? 'Company / facility / opportunity / contact / project detayları çalışıyor' : 'Kayıtsız detail tipi varsa atlandı'}</small></div>
           <div class="health-card ${assetOk?'health-good':'health-bad'}"><span>Frontend asset</span><strong>${assetOk?'OK':'Hata'}</strong><small>${esc(build)}</small></div>
           <div class="health-card"><span>Ort. API gecikmesi</span><strong>${avg} ms</strong><small>Tarayıcıdan Edge Function round-trip</small></div>
-          <div class="health-card ${newest?'health-good':'health-warn'}"><span>API freshness</span><strong>${newest?'Canlı':'Bilinmiyor'}</strong><small>${newest ? esc(new Date(newest).toLocaleString('tr-TR')) : 'generatedAt alınamadı'}</small></div>
+          <div class="health-card ${freshness.klass}"><span>Veri freshness</span><strong>${esc(freshness.label)}</strong><small>${esc(freshness.detail)}</small></div>
         </div>
         <div class="health-routes">${results.map(r=>`<span class="health-chip ${r.ok?'good':'bad'}" title="HTTP ${r.status}${r.error?` · ${esc(r.error)}`:''}">${esc(r.view)} · ${r.ok?'OK':`HTTP ${r.status||'ERR'}`}</span>`).join('')}</div>
         <div class="health-routes">${details.map(r=>`<span class="health-chip ${r.ok?(r.skipped?'warn':'good'):'bad'}" title="${r.skipped?'Örnek kayıt yok':`HTTP ${r.status}${r.error?` · ${esc(r.error)}`:''}`}">${esc(r.kind)} detail · ${r.ok?(r.skipped?'SKIP':'OK'):`HTTP ${r.status||'ERR'}`}</span>`).join('')}</div>`

@@ -140,7 +140,33 @@
     }catch(err){target.innerHTML = `<div class="map-fallback">Harita verisi yüklenemedi: ${esc(err.message || err)}. Altındaki tablo kullanılabilir durumda.</div>`}
   }
 
-  function sync(){installDetailRouting();const {view}=parseRoute();if(view===MAP_VIEW) setTimeout(showMap,120);else hideMap();routeDetail()}
+  function ensureExecutiveSalesKpis(){
+    const grid=document.querySelector('#overviewView .hero-grid')
+    if(!grid) return
+    if(!document.getElementById('highScoreOps')){
+      grid.insertAdjacentHTML('beforeend','<article class="hero-card"><span>Yüksek Skor</span><strong id="highScoreOps">—</strong><small>score ≥ 70 fırsat</small></article><article class="hero-card"><span>7G Dokunulmamış</span><strong id="untouchedOps">—</strong><small>aksiyon bekleyen fırsat</small></article>')
+    }
+  }
+
+  function installExecutiveKpis(){
+    if(typeof window.renderOverview!=='function'||window.renderOverview.__fxSalesKpis) return
+    const base=window.renderOverview
+    const wrapped=function(data){
+      const result=base(data)
+      ensureExecutiveSalesKpis()
+      const pipeline=data?.pipeline||{}
+      const high=document.getElementById('highScoreOps')
+      const untouched=document.getElementById('untouchedOps')
+      if(high) high.textContent=new Intl.NumberFormat('tr-TR').format(pipeline.high_score??0)
+      if(untouched) untouched.textContent=new Intl.NumberFormat('tr-TR').format(pipeline.untouched_7d??0)
+      return result
+    }
+    wrapped.__fxSalesKpis=true
+    window.renderOverview=wrapped
+    ensureExecutiveSalesKpis()
+  }
+
+  function sync(){installDetailRouting();installExecutiveKpis();const {view}=parseRoute();if(view===MAP_VIEW) setTimeout(showMap,120);else hideMap();routeDetail()}
 
   document.addEventListener('click',e=>{
     const back=e.target.closest?.('#detailBack')
@@ -154,4 +180,5 @@
   window.addEventListener('load',sync)
   document.addEventListener('visibilitychange',()=>{if(!document.hidden) sync()})
   installDetailRouting()
+  installExecutiveKpis()
 })()

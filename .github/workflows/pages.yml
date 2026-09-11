@@ -172,4 +172,13 @@ jobs:
           grep -Eqi '^access-control-allow-methods:.*GET' /tmp/api-options.headers
           grep -Eqi '^access-control-allow-headers:.*authorization' /tmp/api-options.headers
 
-          echo "Live dashboard assets and exact build SHA verified; navigation/drill-down/health checks are present; protected Edge API and browser CORS preflight are healthy."
+          # Legacy dashboard functions are deliberately retired. Fail deployment if either
+          # starts serving data again, preventing an old or weaker access path from returning.
+          for legacy in factory-dashboard factory-xray-dashboard; do
+            legacy_url="https://ycdrdcawvvspzilmzgjy.supabase.co/functions/v1/${legacy}"
+            legacy_code="$(curl --silent --output "/tmp/${legacy}.json" --write-out '%{http_code}' --retry 4 --retry-all-errors --retry-delay 3 "$legacy_url")"
+            test "$legacy_code" = "410" || { echo "Legacy endpoint ${legacy} unexpectedly returned HTTP ${legacy_code}"; exit 1; }
+            grep -qi 'legacy_endpoint_retired' "/tmp/${legacy}.json" || { echo "Legacy endpoint ${legacy} did not return retirement marker"; exit 1; }
+          done
+
+          echo "Live dashboard assets and exact build SHA verified; navigation/drill-down/health checks are present; protected Edge API/CORS are healthy; legacy dashboard endpoints remain retired."

@@ -9,7 +9,7 @@
     if(!grid) return
     const defs=[
       ['highScore','Yüksek Skor','70+ opportunity score'],
-      ['untouched7d','7+ Gün Sessiz','temas/güncelleme bekleyen fırsat'],
+      ['untouched7d','7+ Gün Sessiz','7+ gündür güncellenmeyen fırsat'],
       ['pendingProposalValue','Teklif Bekleyen','açık teklif toplam EUR değeri'],
       ['winRate','Win Rate','kazanılan / kapanan fırsat']
     ]

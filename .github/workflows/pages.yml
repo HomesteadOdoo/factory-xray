@@ -22,7 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       - name: Stamp dashboard build metadata
         shell: bash
         run: |
@@ -34,7 +34,7 @@ jobs:
           features: contact-detail, project-detail, live-map, health-self-test
           EOF
       - name: Configure Pages
-        uses: actions/configure-pages@v5
+        uses: actions/configure-pages@v6
         with:
           enablement: true
       - name: Static integrity check
@@ -104,13 +104,13 @@ jobs:
             exit 1
           fi
       - name: Upload static site
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v5
         with:
           path: ./public
           name: github-pages-${{ github.run_attempt }}
       - name: Deploy to GitHub Pages
         id: deployment
-        uses: actions/deploy-pages@v4
+        uses: actions/deploy-pages@v5
         with:
           artifact_name: github-pages-${{ github.run_attempt }}
       - name: Verify live dashboard

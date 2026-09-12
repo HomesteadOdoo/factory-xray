@@ -60,10 +60,14 @@
     const url = new URL(API)
     if(view !== 'overview') url.searchParams.set('view', view)
     const {res, body, elapsed} = await requestJson(url, auth)
-    const latestDataUpdate = view === 'health'
-      ? (body?.rows || []).map(r => r?.latest_update).filter(Boolean).sort().at(-1) || null
-      : null
-    return { view, ok: res.ok && body?.ok === true, status: res.status, elapsed, generatedAt: body?.generatedAt || null, latestDataUpdate }
+    return {
+      view,
+      ok: res.ok && body?.ok === true,
+      status: res.status,
+      elapsed,
+      generatedAt: body?.generatedAt || null,
+      healthRows: view === 'health' ? (body?.rows || []) : null,
+    }
   }
 
   async function requestDetailSample(listView, kind, auth){
@@ -87,15 +91,31 @@
     }
   }
 
-  function freshnessMeta(timestamp){
-    if(!timestamp) return {klass:'health-warn', label:'Bilinmiyor', detail:'latest_update alınamadı'}
+  function ageMeta(timestamp){
+    if(!timestamp) return {klass:'warn', ageHours:null, label:'Bilinmiyor', detail:'latest_update alınamadı'}
     const t = new Date(timestamp).getTime()
-    if(Number.isNaN(t)) return {klass:'health-warn', label:'Bilinmiyor', detail:String(timestamp)}
+    if(Number.isNaN(t)) return {klass:'warn', ageHours:null, label:'Bilinmiyor', detail:String(timestamp)}
     const ageMs = Math.max(0, Date.now() - t)
     const ageHours = ageMs / 3600000
     const label = ageHours < 1 ? `${Math.max(1,Math.round(ageMs/60000))} dk` : ageHours < 48 ? `${Math.round(ageHours)} sa` : `${Math.round(ageHours/24)} gün`
-    const klass = ageHours <= 24 ? 'health-good' : ageHours <= 72 ? 'health-warn' : 'health-bad'
-    return {klass, label, detail:`Son gerçek veri güncellemesi: ${new Date(t).toLocaleString('tr-TR')}`}
+    const klass = ageHours <= 24 ? 'good' : ageHours <= 72 ? 'warn' : 'bad'
+    return {klass, ageHours, label, detail:new Date(t).toLocaleString('tr-TR')}
+  }
+
+  function freshnessSummary(rows){
+    const populated = (rows || []).filter(r => Number(r?.records || 0) > 0)
+    if(!populated.length) return {klass:'health-warn', label:'Bilinmiyor', detail:'Health bileşen kaydı yok', chips:[]}
+    const chips = populated.map(row => ({row, meta:ageMeta(row.latest_update)}))
+    const stale = chips.filter(x => x.meta.ageHours == null || x.meta.ageHours > 24)
+    const critical = chips.filter(x => x.meta.ageHours == null || x.meta.ageHours > 72)
+    const ranked = chips.filter(x => x.meta.ageHours != null).sort((a,b) => b.meta.ageHours - a.meta.ageHours)
+    const worst = ranked[0]
+    const klass = critical.length ? 'health-bad' : stale.length ? 'health-warn' : 'health-good'
+    const label = critical.length ? `${critical.length} kritik` : stale.length ? `${stale.length} stale` : 'Tümü güncel'
+    const detail = worst
+      ? `En eski: ${worst.row.component} · ${worst.meta.label} (${worst.meta.detail})`
+      : 'Güncelleme zamanı alınamadı'
+    return {klass, label, detail, chips}
   }
 
   async function run(){
@@ -134,8 +154,8 @@
       const testedDetails = details.filter(r => !r.skipped)
       const allTimings = [...results, ...testedDetails]
       const avg = allTimings.length ? Math.round(allTimings.reduce((a,r)=>a+(r.elapsed||0),0)/allTimings.length) : 0
-      const latestDataUpdate = results.find(r => r.view === 'health')?.latestDataUpdate || null
-      const freshness = freshnessMeta(latestDataUpdate)
+      const healthRows = results.find(r => r.view === 'health')?.healthRows || []
+      const freshness = freshnessSummary(healthRows)
       const statusClass = failed.length ? 'health-bad' : 'health-good'
       const detailClass = failedDetails.length ? 'health-bad' : (testedDetails.length === DETAIL_VIEWS.length ? 'health-good' : 'health-warn')
       root.innerHTML = `
@@ -147,7 +167,8 @@
           <div class="health-card ${freshness.klass}"><span>Veri freshness</span><strong>${esc(freshness.label)}</strong><small>${esc(freshness.detail)}</small></div>
         </div>
         <div class="health-routes">${results.map(r=>`<span class="health-chip ${r.ok?'good':'bad'}" title="HTTP ${r.status}${r.error?` · ${esc(r.error)}`:''}">${esc(r.view)} · ${r.ok?'OK':`HTTP ${r.status||'ERR'}`}</span>`).join('')}</div>
-        <div class="health-routes">${details.map(r=>`<span class="health-chip ${r.ok?(r.skipped?'warn':'good'):'bad'}" title="${r.skipped?'Örnek kayıt yok':`HTTP ${r.status}${r.error?` · ${esc(r.error)}`:''}`}">${esc(r.kind)} detail · ${r.ok?(r.skipped?'SKIP':'OK'):`HTTP ${r.status||'ERR'}`}</span>`).join('')}</div>`
+        <div class="health-routes">${details.map(r=>`<span class="health-chip ${r.ok?(r.skipped?'warn':'good'):'bad'}" title="${r.skipped?'Örnek kayıt yok':`HTTP ${r.status}${r.error?` · ${esc(r.error)}`:''}`}">${esc(r.kind)} detail · ${r.ok?(r.skipped?'SKIP':'OK'):`HTTP ${r.status||'ERR'}`}</span>`).join('')}</div>
+        <div class="health-routes">${freshness.chips.map(({row,meta})=>`<span class="health-chip ${meta.klass}" title="${esc(row.component)} · ${esc(meta.detail)}">${esc(row.component)} · ${esc(meta.label)}</span>`).join('')}</div>`
     } finally { running = false }
   }
 

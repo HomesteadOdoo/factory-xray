@@ -28,10 +28,26 @@
     return res.json()
   }
 
+  function normalizeStatus(value){
+    return String(value||'').trim().toLocaleLowerCase('tr-TR').replace(/[_-]+/g,' ').replace(/\s+/g,' ')
+  }
+
   function isOpenProposal(status){
-    const s=String(status||'').trim().toLocaleLowerCase('tr-TR')
+    const s=normalizeStatus(status)
     if(!s) return true
-    return !/(kazan|won|accepted|onay|kaybed|lost|reject|red|cancel|iptal|closed|kapal)/.test(s)
+    const terminal=[
+      /^won$/, /^kazan(ıldı|ildi|an)?$/, /^accepted$/, /^approved$/, /^onaylandı$/,
+      /^lost$/, /^kaybedildi$/, /^rejected?$/, /^reddedildi$/, /^cancelled?$/, /^iptal( edildi)?$/,
+      /^closed$/, /^kapalı$/, /^closed won$/, /^closed lost$/
+    ]
+    return !terminal.some(re=>re.test(s))
+  }
+
+  function outcome(stage){
+    const s=normalizeStatus(stage)
+    if(/(^|\b)(won|kazanıldı|kazanildi|kazan)(\b|$)/.test(s)) return 'won'
+    if(/(^|\b)(lost|kaybedildi|kaybedilmiş|kaybedilmis)(\b|$)/.test(s)) return 'lost'
+    return null
   }
 
   async function refresh(){
@@ -40,9 +56,11 @@
     if(!auth) return
     try{
       const proposalUrl=new URL(API); proposalUrl.searchParams.set('view','proposals')
-      const [data,proposalData]=await Promise.all([
+      const opportunityUrl=new URL(API); opportunityUrl.searchParams.set('view','opportunities')
+      const [data,proposalData,opportunityData]=await Promise.all([
         fetchJson(API,auth),
-        fetchJson(proposalUrl,auth)
+        fetchJson(proposalUrl,auth),
+        fetchJson(opportunityUrl,auth)
       ])
       const high=Number(data.pipeline?.high_score||0)
       const stale=Number(data.pipeline?.untouched_7d||0)
@@ -54,13 +72,11 @@
         .reduce((sum,p)=>sum+(Number(p.amount_eur)||0),0)
       document.getElementById('pendingProposalValue').textContent=eur.format(pending)
 
-      const stages=Array.isArray(data.stages)?data.stages:[]
       let won=0,lost=0
-      stages.forEach(s=>{
-        const name=String(s.name||'').toLocaleLowerCase('tr-TR')
-        const n=Number(s.opportunities||0)
-        if(/kazan|won/.test(name)) won+=n
-        if(/kaybed|lost/.test(name)) lost+=n
+      ;(opportunityData.rows||[]).forEach(o=>{
+        const result=outcome(o.stage)
+        if(result==='won') won+=1
+        if(result==='lost') lost+=1
       })
       const closed=won+lost
       document.getElementById('winRate').textContent=closed?`%${Math.round((won/closed)*100)}`:'—'

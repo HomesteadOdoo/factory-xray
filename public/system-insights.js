@@ -20,6 +20,7 @@
   }
 
   async function fetchView(view='overview'){
+    if(view!=='overview'&&typeof window.fxFetchAllView==='function') return window.fxFetchAllView(view);
     const auth=sessionStorage.getItem(AUTH_KEY); if(!auth) return null;
     const url=new URL(API);
     if(view!=='overview') url.searchParams.set('view',view);

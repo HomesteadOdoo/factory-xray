@@ -12,7 +12,7 @@
   };
   const p2r=Object.fromEntries(Object.entries(regions).flatMap(([r,ps])=>ps.map(p=>[p,r])));
   const esc=(v='')=>String(v).replace(/[&<>"']/g,s=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[s]));
-  async function rows(){const auth=sessionStorage.getItem(AUTH_KEY);if(!auth)return[];const u=new URL(API);u.searchParams.set('view','facilities');const r=await fetch(u,{headers:{Authorization:`Basic ${auth}`},cache:'no-store'});if(!r.ok)throw new Error(`API ${r.status}`);return (await r.json()).rows||[]}
+  async function rows(){if(typeof window.fxFetchAllView==='function')return(await window.fxFetchAllView('facilities')).rows||[];const auth=sessionStorage.getItem(AUTH_KEY);if(!auth)return[];const u=new URL(API);u.searchParams.set('view','facilities');const r=await fetch(u,{headers:{Authorization:`Basic ${auth}`},cache:'no-store'});if(!r.ok)throw new Error(`API ${r.status}`);return(await r.json()).rows||[]}
   const count=n=>Array.isArray(n)?n.length:Object.values(n).reduce((s,v)=>s+count(v),0);
   function wireFacilityDrill(panel){
     panel.querySelectorAll('[data-facility-id]').forEach(btn=>btn.addEventListener('click',()=>{

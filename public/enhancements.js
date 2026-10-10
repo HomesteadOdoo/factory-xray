@@ -80,6 +80,7 @@
   }
 
   async function fetchView(view){
+    if(typeof window.fxFetchAllView==='function') return window.fxFetchAllView(view)
     const auth=sessionStorage.getItem(AUTH_KEY_NAME)
     if(!auth) return {rows:[]}
     const url=new URL(API); if(view!=='overview') url.searchParams.set('view',view)

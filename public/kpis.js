@@ -59,8 +59,8 @@
       const opportunityUrl=new URL(API); opportunityUrl.searchParams.set('view','opportunities')
       const [data,proposalData,opportunityData]=await Promise.all([
         fetchJson(API,auth),
-        fetchJson(proposalUrl,auth),
-        fetchJson(opportunityUrl,auth)
+        typeof window.fxFetchAllView==='function'?window.fxFetchAllView('proposals'):fetchJson(proposalUrl,auth),
+        typeof window.fxFetchAllView==='function'?window.fxFetchAllView('opportunities'):fetchJson(opportunityUrl,auth)
       ])
       const high=Number(data.pipeline?.high_score||0)
       const stale=Number(data.pipeline?.untouched_7d||0)

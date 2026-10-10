@@ -89,6 +89,24 @@ async function api(view='overview',params={}){
   return res.json()
 }
 
+async function apiAll(view='overview'){
+  if(view==='overview') return api(view)
+  const pageSize=1000
+  const allRows=[]
+  let page=1
+  let data=null
+  while(page<=100){
+    data=await api(view,{page,pageSize})
+    const rows=Array.isArray(data.rows)?data.rows:[]
+    allRows.push(...rows)
+    if(rows.length<pageSize) break
+    page+=1
+  }
+  if(page>100) throw new Error('API pagination safety limit exceeded')
+  return {...data,rows:allRows,pagination:{...(data?.pagination||{}),pagesLoaded:page,totalLoaded:allRows.length,complete:true}}
+}
+window.fxFetchAllView=apiAll
+
 async function apiDetail(kind,id){
   const auth=getAuth(); if(!auth) throw new Error('NO_AUTH')
   const url=new URL(API_URL); url.searchParams.set('detail',kind); url.searchParams.set('id',id)
@@ -174,7 +192,7 @@ async function load(view=currentView()){
   if(!getAuth()){showLogin(true);return}
   setActiveNav(view); $('refreshBtn').disabled=true; $('refreshBtn').textContent='Yükleniyor…'; setStatus('Canlı veriler güncelleniyor…')
   try{
-    const data=await api(view)
+    const data=await apiAll(view)
     if(view==='overview'){$('overviewView').classList.remove('hidden');$('dataView').classList.add('hidden');renderOverview(data)}
     else{$('overviewView').classList.add('hidden');$('dataView').classList.remove('hidden');renderTable(view,data)}
     showLogin(false); setStatus('')
